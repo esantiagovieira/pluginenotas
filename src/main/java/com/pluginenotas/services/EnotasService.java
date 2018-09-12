@@ -5,6 +5,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.net.URISyntaxException;
 import java.sql.ResultSet;
 
 import org.apache.http.HttpEntity;
@@ -12,6 +13,7 @@ import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
+import org.apache.http.client.utils.URIBuilder;
 import org.apache.http.entity.ContentType;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.entity.mime.MultipartEntityBuilder;
@@ -31,6 +33,7 @@ public class EnotasService {
 	private String apiKey = "NGUyY2UwODItZTRmNi00ZThjLTkwNjMtZjgwYTU2ZjUwMjAw";
 	private String vincularLogotipo = "https://api.enotasgw.com.br/v1/empresas/%s/logo";
 	private String incluirEmpresa = "https://api.enotasgw.com.br/v1/empresas";
+	private String listarEmpresa = "https://api.enotasgw.com.br/v2/empresas";
 
 	private String idEmpresa = "3979C6D4-FD67-4B3F-A720-3E5EEE100400";
 	
@@ -189,4 +192,43 @@ public String enviarlogo (String idempresa ) throws ClientProtocolException, IOE
 //		String idEmpresa = enviarEmpresa(root.toString());
 		return root.toString();
 	}
+
+	public String findByCNPJ(String cnpj) {
+		ObjectMapper mapper = new ObjectMapper();
+		CloseableHttpClient httpClient = HttpClients.createDefault();
+		String id="";
+		try {
+			URIBuilder builder = new URIBuilder(listarEmpresa);
+			builder.setParameter("pageNumber", "0").
+			setParameter("pageSize", "5").
+			setParameter("searchBy", "cnpj").
+			setParameter("searchTerm", cnpj).
+			setParameter("sortBy", "cnpj").
+			setParameter("sortDirection", "asc");
+			HttpGet get = new HttpGet(builder.build());
+			get.setHeader("Accept", "application/json");
+			get.addHeader("Authorization", "Basic " + apiKey);
+			
+			CloseableHttpResponse response = httpClient.execute(get);
+			JsonNode rootArray = mapper.readTree(response.getEntity().getContent());
+			System.out.println(rootArray);
+			
+			for(JsonNode root : rootArray) {
+				if(root.has("id")) {
+					id = root.path("id").asText();
+				}
+				else {
+					id = root.path("mensagem").asText();
+				}
+			}
+			
+		} catch (URISyntaxException e1) {
+			e1.printStackTrace();
+		} catch(Exception e) {
+			throw new RuntimeException("Servidor retornou erro :" + e.getMessage());
+		}
+		
+		return id;
+	}
+	
 }
