@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URISyntaxException;
 import java.sql.ResultSet;
+import java.util.Map;
 
 import org.apache.http.HttpEntity;
 import org.apache.http.client.ClientProtocolException;
@@ -19,6 +20,7 @@ import org.apache.http.entity.StringEntity;
 import org.apache.http.entity.mime.MultipartEntityBuilder;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -34,8 +36,10 @@ public class EnotasService {
 	private String vincularLogotipo = "https://api.enotasgw.com.br/v1/empresas/%s/logo";
 	private String incluirEmpresa = "https://api.enotasgw.com.br/v1/empresas";
 	private String listarEmpresa = "https://api.enotasgw.com.br/v2/empresas";
-
 	private String idEmpresa = "3979C6D4-FD67-4B3F-A720-3E5EEE100400";
+	
+	@Autowired
+	IbgeService ibgeService;
 	
 public String enviarlogo (String idempresa ) throws ClientProtocolException, IOException {
 		
@@ -100,12 +104,10 @@ public String enviarlogo (String idempresa ) throws ClientProtocolException, IOE
 		try {
 			StringEntity entity = new StringEntity(json, ContentType.APPLICATION_JSON);
 			post.setEntity(entity);
-//			entity.setContentEncoding("UTF-8");
-//			entity.setContentType("application/json");
+			System.out.println("Json enviado para o enotas:");
 			System.out.println(json);
-			System.out.println("======================");
 			CloseableHttpResponse response = httpClient.execute(post);
-			System.out.println(response.getStatusLine().getStatusCode() + " - " + response.getStatusLine().getReasonPhrase());
+			System.out.println("Resposta do servidor: " + response.getStatusLine().getStatusCode() + " - " + response.getStatusLine().getReasonPhrase());
 			
 			JsonNode rootArray = mapper.readTree(response.getEntity().getContent());
 			for(JsonNode root : rootArray) {
@@ -116,7 +118,6 @@ public String enviarlogo (String idempresa ) throws ClientProtocolException, IOE
 					idEmpresa = root.path("mensagem").asText();
 				}
 			}
-			
 		}
 		catch (Exception e) {
 			throw new RuntimeException("Erro ao cadastrar empresa: " + e.getMessage());
@@ -124,73 +125,76 @@ public String enviarlogo (String idempresa ) throws ClientProtocolException, IOE
 		return idEmpresa ;
 	}
 	
-	public String buildJsonEmpresa(String host, String dbName, String user, String pass, String port, Integer id) {
-		IbgeService ibge = new IbgeService();
+	public String buildJsonEmpresa(Map<String, Object> payload) {
 		ObjectMapper mapper = new ObjectMapper();
 		mapper.configure(SerializationFeature.INDENT_OUTPUT, true);
 		ObjectNode root = mapper.createObjectNode();
-		ResultSet dao = new MYSQLAccess().readDatabase(id, host,dbName,user, pass, port);
+		ResultSet dao = new MYSQLAccess().readDatabase(
+				Integer.parseInt(payload.get("id").toString()),
+				payload.get("host").toString(),
+				payload.get("dbName").toString(),
+				payload.get("user").toString(),
+				payload.get("pass").toString(),
+				payload.get("port").toString());
 		
 		try {
-		Integer codigoIbgeUf =Integer.parseInt(ibge.buscaUFs(dao.getString("sigla_uf"))) ;
-		Integer codigoIbgeCidade = Integer.parseInt(ibge.buscaMunicipioPorUF(codigoIbgeUf, dao.getString("cidade")));
-		
-		
-		root.putNull("id");
-		root.put("cnpj", dao.getString("cnpj").replaceAll("[^0-9]", ""));
-		root.put("inscricaoMunicipal", dao.getString("insc_municipal").replaceAll("[^0-9]", ""));
-		root.put("inscricaoEstadual", dao.getString("insc_estadual").replaceAll("[^0-9]", ""));
-		root.put("razaoSocial", dao.getString("razao_social"));
-		root.put("nomeFantasia", dao.getString("nome_fantasia"));
-		
-		int crt = Integer.parseInt(dao.getString("crt"));
-		if(crt>1) {
-			root.put("optanteSimplesNacional", true);
-		}
-		else {
-			root.put("optanteSimplesNacional", true);
+			Integer codigoIbgeUf =Integer.parseInt(ibgeService.buscaUFs(dao.getString("sigla_uf"))) ;
+			Integer codigoIbgeCidade = Integer.parseInt(ibgeService.buscaMunicipioPorUF(codigoIbgeUf, dao.getString("cidade")));
+			
+			root.putNull("id");
+			root.put("cnpj", dao.getString("cnpj").replaceAll("[^0-9]", ""));
+			root.put("inscricaoMunicipal", dao.getString("insc_municipal").replaceAll("[^0-9]", ""));
+			root.put("inscricaoEstadual", dao.getString("insc_estadual").replaceAll("[^0-9]", ""));
+			root.put("razaoSocial", dao.getString("razao_social"));
+			root.put("nomeFantasia", dao.getString("nome_fantasia"));
+			
+			int crt = Integer.parseInt(dao.getString("crt"));
+			if(crt>1) {
+				root.put("optanteSimplesNacional", true);
 			}
-		
-		root.put("email", dao.getString("email"));
-		root.put("telefoneComercial", dao.getString("ddd_telefone") + dao.getLong("telefone"));
-		root.put("incentivadorCultural", false);
-		root.put("regimeEspecialTributacao",dao.getString("cod_regime_tributacao_rps"));
-		root.put("codigoServicoMunicipal", "0101");
-		root.putNull("itemListaServicoLC116");
-		root.putNull("cnae");
-		root.put("aliquotaIss", 0.02);
-		root.put("descricaoServico","   ");
-		root.put("enviarEmailCliente",true);
-		
-		ObjectNode endereco = mapper.createObjectNode();
-		endereco.put("codigoIbgeUf", codigoIbgeUf);
-		endereco.put("codigoIbgeCidade", codigoIbgeCidade);
-		endereco.put("pais", dao.getString("pais"));
-		endereco.put("uf", dao.getString("sigla_uf"));
-		endereco.put("cidade", dao.getString("cidade"));
-		endereco.put("logradouro", dao.getString("endereco"));
-		endereco.put("numero", dao.getString("numero"));
-		endereco.put("complemento", dao.getString("complemento_end"));
-		endereco.put("bairro", dao.getString("bairro"));
-		endereco.put("cep", dao.getString("cep"));
-		
-		ObjectNode confProducao = mapper.createObjectNode();
-		confProducao.put("sequencialNFe", 1);
-		confProducao.put("serieNFe", 1);
-		confProducao.put("sequencialLoteNFe", 1);
-		confProducao.putNull("usuarioAcessoProvedor");
-		confProducao.putNull("senhaAcessoProvedor");
-		confProducao.putNull("tokenAcessoProvedor");
-		
-		root.set("endereco", endereco);
-		root.set("ConfiguracoesNFSeHomologacao", confProducao);
-		root.set("ConfiguracoesNFSeProducao", confProducao);
-		}
-		catch (Exception e) {
-			throw new RuntimeException("Falha ao criar o json: ");
-		}
-//		String idEmpresa = enviarEmpresa(root.toString());
-		return root.toString();
+			else {
+				root.put("optanteSimplesNacional", true);
+				}
+			
+			root.put("email", dao.getString("email"));
+			root.put("telefoneComercial", dao.getString("ddd_telefone") + dao.getLong("telefone"));
+			root.put("incentivadorCultural", false);
+			root.put("regimeEspecialTributacao",dao.getString("cod_regime_tributacao_rps"));
+			root.put("codigoServicoMunicipal", payload.get("codigoServicoMunicipal").toString());
+			root.putNull("itemListaServicoLC116");
+			root.putNull("cnae");
+			root.put("aliquotaIss", 0.02);
+			root.put("descricaoServico",".   ");
+			root.put("enviarEmailCliente",true);
+			
+			ObjectNode endereco = mapper.createObjectNode();
+			endereco.put("codigoIbgeUf", codigoIbgeUf);
+			endereco.put("codigoIbgeCidade", codigoIbgeCidade);
+			endereco.put("pais", dao.getString("pais"));
+			endereco.put("uf", dao.getString("sigla_uf"));
+			endereco.put("cidade", dao.getString("cidade"));
+			endereco.put("logradouro", dao.getString("endereco"));
+			endereco.put("numero", dao.getString("numero"));
+			endereco.put("complemento", dao.getString("complemento_end"));
+			endereco.put("bairro", dao.getString("bairro"));
+			endereco.put("cep", dao.getString("cep"));
+			
+			ObjectNode confProducao = mapper.createObjectNode();
+			confProducao.put("sequencialNFe", 1);
+			confProducao.put("serieNFe", 1);
+			confProducao.put("sequencialLoteNFe", 1);
+			confProducao.putNull("usuarioAcessoProvedor");
+			confProducao.putNull("senhaAcessoProvedor");
+			confProducao.putNull("tokenAcessoProvedor");
+			
+			root.set("endereco", endereco);
+			root.set("ConfiguracoesNFSeHomologacao", confProducao);
+			root.set("ConfiguracoesNFSeProducao", confProducao);
+			}
+			catch (Exception e) {
+				throw new RuntimeException("Falha ao criar o json: ");
+			}
+			return root.toString();
 	}
 
 	public String findByCNPJ(String cnpj) {
@@ -200,7 +204,7 @@ public String enviarlogo (String idempresa ) throws ClientProtocolException, IOE
 		try {
 			URIBuilder builder = new URIBuilder(listarEmpresa);
 			builder.setParameter("pageNumber", "0").
-			setParameter("pageSize", "5").
+			setParameter("pageSize", "6").
 			setParameter("searchBy", "cnpj").
 			setParameter("searchTerm", cnpj).
 			setParameter("sortBy", "cnpj").

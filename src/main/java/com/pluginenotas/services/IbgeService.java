@@ -7,10 +7,12 @@ import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
+import org.springframework.stereotype.Service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+@Service
 public class IbgeService {
 
 	private String apiUFs = "https://servicodados.ibge.gov.br/api/v1/localidades/estados";
@@ -27,6 +29,7 @@ public class IbgeService {
 		try {
 			response = httpClient.execute(get);
 			if(response.getStatusLine().getStatusCode()!=200) {
+				//TODO criar handler para erros de retorno
 				throw new RuntimeException("Erro na busca de UF: " +  response.getStatusLine().getStatusCode());
 			}
 			JsonNode rootArray = mapper.readTree(response.getEntity().getContent()); 
@@ -54,6 +57,7 @@ public class IbgeService {
 		try {
 			CloseableHttpResponse response = httpClient.execute(get);
 			if(response.getStatusLine().getStatusCode()!=200) {
+				//TODO criar handler para erros de retorno
 				throw new RuntimeException("Erro na busca de munícipio: " +  response.getStatusLine().getStatusCode());
 			}
 			JsonNode rootArray = mapper.readTree(response.getEntity().getContent());
